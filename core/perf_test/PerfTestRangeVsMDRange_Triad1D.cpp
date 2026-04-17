@@ -25,6 +25,33 @@ using view_type       = Kokkos::View<float*, execution_space>;
 
 constexpr float triad_scalar = 1.61803398875f;
 
+template <class... Traits>
+void report_policy_counters(benchmark::State& state,
+                            const Kokkos::RangePolicy<Traits...>& policy,
+                            int tile_size) {
+  state.counters["Tile"]           = benchmark::Counter(tile_size);
+  state.counters["RangeChunkAuto"] = benchmark::Counter(policy.chunk_size());
+  state.counters["MDRangeTileEffective"] = benchmark::Counter(0);
+  state.counters["NumTiles"]             = benchmark::Counter(0);
+}
+
+template <class... Traits>
+void report_policy_counters(benchmark::State& state,
+                            const Kokkos::MDRangePolicy<Traits...>& policy,
+                            int tile_size) {
+  using md_policy_type    = Kokkos::MDRangePolicy<Traits...>;
+  using range_policy_type = typename md_policy_type::impl_range_policy;
+
+  range_policy_type range_policy_1d(policy.space(), policy.m_lower[0],
+                                    policy.m_upper[0]);
+
+  state.counters["Tile"] = benchmark::Counter(tile_size);
+  state.counters["RangeChunkAuto"] =
+      benchmark::Counter(range_policy_1d.chunk_size());
+  state.counters["MDRangeTileEffective"] = benchmark::Counter(policy.m_tile[0]);
+  state.counters["NumTiles"] = benchmark::Counter(policy.m_num_tiles);
+}
+
 struct TriadFixture {
   view_type a;
   view_type b;
@@ -53,7 +80,7 @@ struct TriadFixture {
       exec.fence();
       KokkosBenchmark::report_results(state, c, 3, timer.seconds());
     }
-    state.counters["Tile"] = benchmark::Counter(tile_size);
+    report_policy_counters(state, policy, tile_size);
   }
 };
 
